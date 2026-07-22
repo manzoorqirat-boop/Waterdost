@@ -1,0 +1,9 @@
+namespace WaterApp.Application.DTOs;
+
+public record SellerRegisterRequest(string CompanyName, double BaseLatitude, double BaseLongitude, List<string> ServicePincodes);
+
+public record SellerDto(Guid Id, string CompanyName, string Status, string? LogoUrl);
+
+public record ProductCreateRequest(string Name, string VolumeLabel, decimal Price, int StockQty);
+
+public record ProductDto(Guid Id, Guid SellerId, string Name, string VolumeLabel, decimal Price, int StockQty, bool IsActive, string? ImageUrl);
