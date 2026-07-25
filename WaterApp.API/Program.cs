@@ -55,7 +55,14 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+        policy
+            .WithOrigins(
+                "https://waterdost-frontend-production.up.railway.app",
+                "http://localhost:8081", // Expo web dev server
+                "http://localhost:19006" // legacy Expo web dev port
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader());
 });
 
 var app = builder.Build();
