@@ -43,6 +43,7 @@ static string? ConvertToNpgsqlConnectionString(string? raw)
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 
 // ---- JWT Auth ----
 var jwtSecret = builder.Configuration["Jwt:Secret"]
