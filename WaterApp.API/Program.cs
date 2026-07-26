@@ -101,4 +101,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// No EF Core migrations exist for this project yet, so create the schema
+// directly from the current model on startup. Fine for now; if you later
+// add real migrations, remove this and call db.Database.Migrate() instead.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.EnsureCreatedAsync();
+}
+
 app.Run();
