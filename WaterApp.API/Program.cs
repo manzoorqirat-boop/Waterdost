@@ -83,7 +83,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAll", policy =>
         policy
             .WithOrigins(
-                "https://waterdost-frontend-production.up.railway.app",
+                "https://waterdost.qmsofts.com",
                 "http://localhost:8081", // Expo web dev server
                 "http://localhost:19006" // legacy Expo web dev port
             )
