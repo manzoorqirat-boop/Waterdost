@@ -23,4 +23,36 @@ public class AdminController : ControllerBase
         var stats = await _adminService.GetStatsAsync();
         return Ok(stats);
     }
+
+    [HttpGet("sellers")]
+    public async Task<ActionResult<List<AdminSellerResponse>>> GetSellers([FromQuery] string? status)
+    {
+        try
+        {
+            var sellers = await _adminService.GetSellersAsync(status);
+            return Ok(sellers);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPatch("sellers/{id}/status")]
+    public async Task<ActionResult<AdminSellerResponse>> UpdateSellerStatus(Guid id, UpdateSellerStatusRequest request)
+    {
+        try
+        {
+            var seller = await _adminService.UpdateSellerStatusAsync(id, request.Status);
+            return Ok(seller);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }
