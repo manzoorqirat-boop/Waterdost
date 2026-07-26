@@ -6,6 +6,7 @@ namespace WaterApp.Application.Interfaces;
 public interface IAuthService
 {
     Task<AuthResponse> RegisterAsync(RegisterRequest request);
+    Task<AuthResponse> RegisterAdminAsync(RegisterRequest request);
     Task<AuthResponse> LoginAsync(LoginRequest request);
 }
 
