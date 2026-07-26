@@ -2,6 +2,7 @@ using WaterApp.Application.DTOs;
 using WaterApp.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using WaterApp.Domain.Entities;
+using WaterApp.Domain.Enums;
 using WaterApp.Infrastructure.Data;
 
 namespace WaterApp.Infrastructure.Services;
@@ -19,7 +20,24 @@ public class AuthService : IAuthService
         _tokenService = tokenService;
     }
 
+    // Public self-registration. Admin accounts can NEVER be created through this path,
+    // even if a caller sends Role: 2 in the request body.
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    {
+        if (request.Role == UserRole.Admin)
+            throw new InvalidOperationException("Admin accounts cannot be created via public registration.");
+
+        return await CreateUserAsync(request, request.Role);
+    }
+
+    // Only reachable via the key-protected /api/auth/register-admin endpoint.
+    // Forces Admin role regardless of what the caller passed in Role.
+    public async Task<AuthResponse> RegisterAdminAsync(RegisterRequest request)
+    {
+        return await CreateUserAsync(request, UserRole.Admin);
+    }
+
+    private async Task<AuthResponse> CreateUserAsync(RegisterRequest request, UserRole role)
     {
         var exists = await _db.Users.AnyAsync(u => u.Phone == request.Phone);
         if (exists)
@@ -31,7 +49,7 @@ public class AuthService : IAuthService
             Phone = request.Phone,
             Email = request.Email,
             PasswordHash = _hasher.Hash(request.Password),
-            Role = request.Role
+            Role = role
         };
 
         _db.Users.Add(user);
