@@ -45,6 +45,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<ISellerService, SellerService>();
+builder.Services.AddScoped<IBuyerService, BuyerService>();
 
 // ---- JWT Auth ----
 var jwtSecret = builder.Configuration["Jwt:Secret"]
