@@ -90,7 +90,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// Swagger is normally dev-only. Set ENABLE_SWAGGER=true in Railway to turn it on
+// in production temporarily (e.g. to seed data via Try It Out), then remove the
+// env var afterward to lock it back down.
+var swaggerEnabled = app.Environment.IsDevelopment()
+    || Environment.GetEnvironmentVariable("ENABLE_SWAGGER") == "true";
+
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
