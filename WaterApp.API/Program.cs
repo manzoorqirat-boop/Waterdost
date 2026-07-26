@@ -9,12 +9,35 @@ using WaterApp.Infrastructure.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ---- Database ----
-// Railway injects DATABASE_URL; fall back to appsettings connection string locally.
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+// Railway injects DATABASE_URL in URI form (postgresql://user:pass@host:port/db).
+// Npgsql needs keyword=value form (Host=...;Username=...;Password=...;Database=...),
+// so convert it if a URI-style value is present. Falls back to appsettings locally.
+var rawConnectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
+var connectionString = ConvertToNpgsqlConnectionString(rawConnectionString);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
+static string? ConvertToNpgsqlConnectionString(string? raw)
+{
+    if (string.IsNullOrWhiteSpace(raw))
+        return raw;
+
+    // Already in keyword=value format (e.g. "Host=...;Username=...").
+    if (!raw.Contains("://"))
+        return raw;
+
+    var uri = new Uri(raw);
+    var userInfo = uri.UserInfo.Split(':', 2);
+    var username = Uri.UnescapeDataString(userInfo[0]);
+    var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty;
+    var database = uri.AbsolutePath.TrimStart('/');
+    var port = uri.Port == -1 ? 5432 : uri.Port;
+
+    return $"Host={uri.Host};Port={port};Database={database};Username={username};Password={password};SSL Mode=Require;Trust Server Certificate=true";
+}
 
 // ---- DI ----
 builder.Services.AddScoped<IAuthService, AuthService>();
