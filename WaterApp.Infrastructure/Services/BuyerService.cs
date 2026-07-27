@@ -168,29 +168,48 @@ public class BuyerService : IBuyerService
         if (!product.IsActive)
             throw new ArgumentException("This product is currently unavailable.");
 
-        var cart = await GetOrCreateCartAsync(userId);
-        var existingItem = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
-        var desiredQuantity = (existingItem?.Quantity ?? 0) + request.Quantity;
-
-        if (desiredQuantity > product.StockQty)
-            throw new ArgumentException($"Only {product.StockQty} unit(s) of '{product.Name}' are in stock.");
-
-        if (existingItem is not null)
+        // Retry loop: if a concurrent request (e.g. a duplicate double-tap on
+        // "Add to Cart") modifies the same CartItem row between our read and
+        // our save, EF throws DbUpdateConcurrencyException. Rather than bubble
+        // that up as a 500, detach the stale tracked state and re-read the
+        // cart fresh, then try again.
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            existingItem.Quantity = desiredQuantity;
-        }
-        else
-        {
-            cart.Items.Add(new CartItem
+            var cart = await GetOrCreateCartAsync(userId);
+            var existingItem = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
+            var desiredQuantity = (existingItem?.Quantity ?? 0) + request.Quantity;
+
+            if (desiredQuantity > product.StockQty)
+                throw new ArgumentException($"Only {product.StockQty} unit(s) of '{product.Name}' are in stock.");
+
+            if (existingItem is not null)
             {
-                CartId = cart.Id,
-                ProductId = product.Id,
-                Quantity = request.Quantity
-            });
+                existingItem.Quantity = desiredQuantity;
+            }
+            else
+            {
+                cart.Items.Add(new CartItem
+                {
+                    CartId = cart.Id,
+                    ProductId = product.Id,
+                    Quantity = request.Quantity
+                });
+            }
+
+            try
+            {
+                await _db.SaveChangesAsync();
+                return await GetCartAsync(userId);
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < maxAttempts)
+            {
+                foreach (var entry in _db.ChangeTracker.Entries().ToList())
+                    entry.State = EntityState.Detached;
+            }
         }
 
-        await _db.SaveChangesAsync();
-        return await GetCartAsync(userId);
+        throw new InvalidOperationException("Could not update your cart due to a conflicting update. Please try again.");
     }
 
     public async Task<CartDto> UpdateCartItemAsync(Guid userId, Guid productId, int quantity)
