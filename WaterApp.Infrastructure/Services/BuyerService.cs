@@ -157,6 +157,11 @@ public class BuyerService : IBuyerService
         return MapCart(cart);
     }
 
+    // NOTE: This method requires a unique index/constraint on
+    // CartItems ("CartId", "ProductId") in the database. See the
+    // accompanying migration SQL. Without it, ON CONFLICT below will
+    // fail with "there is no unique or exclusion constraint matching
+    // the ON CONFLICT specification".
     public async Task<CartDto> AddToCartAsync(Guid userId, AddToCartRequest request)
     {
         if (request.Quantity <= 0)
@@ -168,48 +173,41 @@ public class BuyerService : IBuyerService
         if (!product.IsActive)
             throw new ArgumentException("This product is currently unavailable.");
 
-        // Retry loop: if a concurrent request (e.g. a duplicate double-tap on
-        // "Add to Cart") modifies the same CartItem row between our read and
-        // our save, EF throws DbUpdateConcurrencyException. Rather than bubble
-        // that up as a 500, detach the stale tracked state and re-read the
-        // cart fresh, then try again.
-        const int maxAttempts = 3;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        var cart = await GetOrCreateCartAsync(userId);
+
+        // Atomic upsert: instead of "read quantity in memory, then write it
+        // back", let Postgres do the read-modify-write in a single statement.
+        // This makes concurrent "Add to Cart" taps (double-clicks, multiple
+        // tabs, etc.) impossible to race against each other, and it removes
+        // the need for the previous DbUpdateConcurrencyException retry loop
+        // entirely.
+        await _db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "CartItems" ("Id", "CartId", "ProductId", "Quantity")
+            VALUES (gen_random_uuid(), {cart.Id}, {product.Id}, {request.Quantity})
+            ON CONFLICT ("CartId", "ProductId")
+            DO UPDATE SET "Quantity" = "CartItems"."Quantity" + EXCLUDED."Quantity"
+            """);
+
+        var updatedQuantity = await _db.CartItems
+            .AsNoTracking()
+            .Where(i => i.CartId == cart.Id && i.ProductId == product.Id)
+            .Select(i => i.Quantity)
+            .FirstAsync();
+
+        if (updatedQuantity > product.StockQty)
         {
-            var cart = await GetOrCreateCartAsync(userId);
-            var existingItem = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
-            var desiredQuantity = (existingItem?.Quantity ?? 0) + request.Quantity;
+            // Roll the quantity back to the stock cap rather than leaving an
+            // over-limit row in the cart or silently succeeding.
+            await _db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "CartItems"
+                SET "Quantity" = {product.StockQty}
+                WHERE "CartId" = {cart.Id} AND "ProductId" = {product.Id}
+                """);
 
-            if (desiredQuantity > product.StockQty)
-                throw new ArgumentException($"Only {product.StockQty} unit(s) of '{product.Name}' are in stock.");
-
-            if (existingItem is not null)
-            {
-                existingItem.Quantity = desiredQuantity;
-            }
-            else
-            {
-                cart.Items.Add(new CartItem
-                {
-                    CartId = cart.Id,
-                    ProductId = product.Id,
-                    Quantity = request.Quantity
-                });
-            }
-
-            try
-            {
-                await _db.SaveChangesAsync();
-                return await GetCartAsync(userId);
-            }
-            catch (DbUpdateConcurrencyException) when (attempt < maxAttempts)
-            {
-                foreach (var entry in _db.ChangeTracker.Entries().ToList())
-                    entry.State = EntityState.Detached;
-            }
+            throw new ArgumentException($"Only {product.StockQty} unit(s) of '{product.Name}' are in stock.");
         }
 
-        throw new InvalidOperationException("Could not update your cart due to a conflicting update. Please try again.");
+        return await GetCartAsync(userId);
     }
 
     public async Task<CartDto> UpdateCartItemAsync(Guid userId, Guid productId, int quantity)
