@@ -473,6 +473,7 @@ public class BuyerService : IBuyerService
     {
         var cart = await _db.Carts
             .Include(c => c.Items).ThenInclude(i => i.Product)
+                .ThenInclude(p => p!.Seller)
             .FirstOrDefaultAsync(c => c.BuyerId == userId);
 
         if (cart is not null)
@@ -521,7 +522,13 @@ public class BuyerService : IBuyerService
     {
         var items = cart.Items
             .Where(i => i.Product is not null)
-            .Select(i => new CartItemDto(i.ProductId, i.Product!.Name, i.Product!.Price, i.Quantity))
+            .Select(i => new CartItemDto(
+                i.ProductId,
+                i.Product!.Name,
+                i.Product!.Price,
+                i.Quantity,
+                i.Product!.SellerId,
+                i.Product!.Seller?.CompanyName ?? ""))
             .ToList();
 
         var total = items.Sum(i => i.Price * i.Quantity);
