@@ -308,7 +308,15 @@ public class BuyerService : IBuyerService
                 PriceAtPurchase = product.Price
             });
 
-            product.StockQty -= item.Quantity;
+            // Atomic conditional decrement: only succeeds if stock is still
+            // sufficient at write time, closing the race where two concurrent
+            // orders both pass the earlier in-memory check and oversell.
+            var rows = await _db.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE "Products" SET "StockQty" = "StockQty" - {item.Quantity}
+                WHERE "Id" = {product.Id} AND "StockQty" >= {item.Quantity}
+                """);
+            if (rows == 0)
+                throw new ArgumentException($"Only a few unit(s) of '{product.Name}' are left in stock. Please refresh your cart.");
         }
 
         order.TotalAmount = total;
