@@ -4,7 +4,7 @@ namespace WaterApp.Application.DTOs;
 
 public record AddToCartRequest(Guid ProductId, int Quantity);
 
-public record CartItemDto(Guid ProductId, string ProductName, decimal Price, int Quantity);
+public record CartItemDto(Guid ProductId, string ProductName, decimal Price, int Quantity, Guid SellerId, string SellerName);
 
 public record CartDto(Guid CartId, List<CartItemDto> Items, decimal Total);
 
