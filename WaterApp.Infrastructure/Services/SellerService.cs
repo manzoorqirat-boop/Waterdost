@@ -167,9 +167,18 @@ public class SellerService : ISellerService
             .FirstOrDefaultAsync(o => o.Id == orderId && o.SellerId == seller.Id)
             ?? throw new KeyNotFoundException("Order not found.");
 
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled)
+            throw new ArgumentException($"An order that is already {order.Status} cannot be changed.");
+        if (parsedStatus == OrderStatus.Placed)
+            throw new ArgumentException("Cannot move an order back to Placed.");
+
         order.Status = parsedStatus;
         if (parsedStatus == OrderStatus.Delivered)
+        {
             order.DeliveredAt = DateTime.UtcNow;
+            if (order.PaymentMode == PaymentMode.CashOnDelivery && order.PaymentStatus == PaymentStatus.Pending)
+                order.PaymentStatus = PaymentStatus.CollectedInCash;
+        }
 
         await _db.SaveChangesAsync();
         return MapOrder(order);
