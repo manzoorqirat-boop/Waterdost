@@ -74,6 +74,7 @@ public class AppDbContext : DbContext
             e.HasOne(ci => ci.Product)
                 .WithMany()
                 .HasForeignKey(ci => ci.ProductId);
+            e.HasIndex(ci => new { ci.CartId, ci.ProductId }).IsUnique();
         });
 
         modelBuilder.Entity<Order>(e =>
