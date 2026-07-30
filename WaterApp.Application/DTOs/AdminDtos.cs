@@ -23,3 +23,15 @@ public record AdminSellerResponse(
 );
 
 public record UpdateSellerStatusRequest(string Status);
+
+public record AdminBuyerResponse(
+    Guid Id,
+    string Name,
+    string Phone,
+    string? Email,
+    bool IsActive,
+    int OrderCount,
+    DateTime CreatedAt
+);
+
+public record UpdateBuyerStatusRequest(bool IsActive);
