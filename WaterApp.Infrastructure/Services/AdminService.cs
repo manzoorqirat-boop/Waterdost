@@ -89,4 +89,51 @@ public class AdminService : IAdminService
             seller.CreatedAt
         );
     }
+
+    public async Task<List<AdminBuyerResponse>> GetBuyersAsync(string? search)
+    {
+        var query = _db.Users.Where(u => u.Role == UserRole.Buyer);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(u => u.Name.Contains(term) || u.Phone.Contains(term));
+        }
+
+        // Project order counts in a single query rather than N per-user lookups.
+        var buyers = await query
+            .OrderByDescending(u => u.CreatedAt)
+            .Select(u => new AdminBuyerResponse(
+                u.Id,
+                u.Name,
+                u.Phone,
+                u.Email,
+                u.IsActive,
+                _db.Orders.Count(o => o.BuyerId == u.Id),
+                u.CreatedAt))
+            .ToListAsync();
+
+        return buyers;
+    }
+
+    public async Task<AdminBuyerResponse> UpdateBuyerStatusAsync(Guid buyerId, bool isActive)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == buyerId && u.Role == UserRole.Buyer)
+            ?? throw new KeyNotFoundException("Buyer not found.");
+
+        user.IsActive = isActive;
+        await _db.SaveChangesAsync();
+
+        var orderCount = await _db.Orders.CountAsync(o => o.BuyerId == user.Id);
+
+        return new AdminBuyerResponse(
+            user.Id,
+            user.Name,
+            user.Phone,
+            user.Email,
+            user.IsActive,
+            orderCount,
+            user.CreatedAt
+        );
+    }
 }
