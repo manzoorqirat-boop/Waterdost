@@ -69,6 +69,9 @@ public class AuthService : IAuthService
         if (!_hasher.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedAccessException("Invalid phone number or password.");
 
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("This account has been deactivated. Please contact support.");
+
         var access = _tokenService.GenerateAccessToken(user);
         var refresh = _tokenService.GenerateRefreshToken();
 
