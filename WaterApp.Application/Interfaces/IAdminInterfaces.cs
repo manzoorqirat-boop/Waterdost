@@ -7,4 +7,6 @@ public interface IAdminService
     Task<AdminStatsResponse> GetStatsAsync();
     Task<List<AdminSellerResponse>> GetSellersAsync(string? status);
     Task<AdminSellerResponse> UpdateSellerStatusAsync(Guid sellerId, string status);
+    Task<List<AdminBuyerResponse>> GetBuyersAsync(string? search);
+    Task<AdminBuyerResponse> UpdateBuyerStatusAsync(Guid buyerId, bool isActive);
 }
