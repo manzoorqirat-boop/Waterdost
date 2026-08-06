@@ -18,20 +18,29 @@ public class BuyerService : IBuyerService
 
     // ==================== Catalog browsing ====================
 
-    public async Task<List<SellerDto>> GetSellersInAreaAsync(string pincode)
+    public async Task<List<SellerDto>> GetSellersInAreaAsync(string pincode, string? category = null)
     {
         if (string.IsNullOrWhiteSpace(pincode))
             throw new ArgumentException("Pincode is required.");
 
         var trimmedPincode = pincode.Trim();
 
-        var sellers = await _db.Sellers
+        var query = _db.Sellers
             .Where(s => s.Status == SellerStatus.Approved &&
-                        s.ServiceAreas.Any(sa => sa.Pincode == trimmedPincode))
+                        s.ServiceAreas.Any(sa => sa.Pincode == trimmedPincode));
+
+        // Optional category filter (e.g. "Groceries"); ignored if not a valid category.
+        if (!string.IsNullOrWhiteSpace(category) &&
+            Enum.TryParse<SellerCategory>(category, ignoreCase: true, out var cat))
+        {
+            query = query.Where(s => s.Category == cat);
+        }
+
+        var sellers = await query
             .OrderBy(s => s.CompanyName)
             .ToListAsync();
 
-        return sellers.Select(s => new SellerDto(s.Id, s.CompanyName, s.Status.ToString(), s.LogoUrl)).ToList();
+        return sellers.Select(s => new SellerDto(s.Id, s.CompanyName, s.Category.ToString(), s.Status.ToString(), s.LogoUrl, s.UpiId)).ToList();
     }
 
     public async Task<List<ProductDto>> GetSellerProductsAsync(Guid sellerId)
@@ -323,8 +332,12 @@ public class BuyerService : IBuyerService
 
         order.Payment = new Payment
         {
-            Gateway = request.PaymentMode == PaymentMode.Online ? "Razorpay" : "COD",
+            Gateway = request.PaymentMode == PaymentMode.Online ? "UPI" : "COD",
             Amount = total,
+            // Buyer-entered UPI reference (UTR) when paying online; used for
+            // manual reconciliation. Payment stays Pending until verified —
+            // tapping "I've paid" places the order but does not confirm money.
+            TransactionId = request.PaymentMode == PaymentMode.Online ? request.PaymentReference?.Trim() : null,
             Status = PaymentStatus.Pending
         };
 
@@ -528,7 +541,8 @@ public class BuyerService : IBuyerService
                 i.Product!.Price,
                 i.Quantity,
                 i.Product!.SellerId,
-                i.Product!.Seller?.CompanyName ?? ""))
+                i.Product!.Seller?.CompanyName ?? "",
+                i.Product!.Seller?.UpiId))
             .ToList();
 
         var total = items.Sum(i => i.Price * i.Quantity);
